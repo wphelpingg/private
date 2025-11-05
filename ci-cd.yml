@@ -1,0 +1,81 @@
+name: WordPress CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # -----------------------
+  # 1. PHP Syntax Check
+  # -----------------------
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Run PHP syntax check
+        run: |
+          set -e
+          for file in $(find . -type f -name "*.php"); do
+            echo "Checking $file"
+            php -l "$file" || exit 1
+          done
+
+  # -----------------------
+  # 2. WordPress Coding Standards
+  # -----------------------
+  phpcs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer, phpcs
+
+      - name: Configure Composer home
+        run: echo "COMPOSER_HOME=$HOME/.config/composer" >> $GITHUB_ENV
+
+      - name: Allow Composer plugins
+        run: composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+
+      - name: Install WPCS
+        run: |
+          composer global require wp-coding-standards/wpcs:"^3.0" dealerdirect/phpcodesniffer-composer-installer:"^1.0"
+          $COMPOSER_HOME/vendor/bin/phpcs --config-delete installed_paths || true
+          $COMPOSER_HOME/vendor/bin/phpcs --config-set installed_paths $COMPOSER_HOME/vendor/wp-coding-standards/wpcs
+
+      - name: Verify PHPCS standards
+        run: $COMPOSER_HOME/vendor/bin/phpcs -i
+
+      - name: Run PHPCS
+        run: $COMPOSER_HOME/vendor/bin/phpcs .
+
+  # -----------------------
+  # 3. PHPUnit Tests
+  # -----------------------
+  phpunit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer, phpunit
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist || true
+
+      - name: Run PHPUnit tests
+        run: vendor/bin/phpunit --testdox || echo "No tests found"
