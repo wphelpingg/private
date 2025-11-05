@@ -1,0 +1,899 @@
+Plugin Header:-------------------
+
+<?php
+/**
+ * Plugin Name: Widgets for WordPress
+ * Description: This is only for testing purpose.
+ * Plugin URI: https://wordpress.org
+ * Version: 1.0
+ * Author: WordPress Developer
+ * Author URI: https://wordpress.org
+ * Text Domain: blocks-addons-for-wordpress
+ *
+ * @package Widgets for WordPress
+ * @since   1.0
+ */
+?>
+
+Basic Constant:-------------------
+
+defined( 'BLOCKS_PLUGIN_PATH' ) || define( 'BLOCKS_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
+defined( 'BLOCKS_PLUGIN_URL' ) || define( 'BLOCKS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+
+
+For Elementor - plugin.php:-------------------
+
+<?php
+/**
+ * Main Elementor `Plugin` Class
+ *
+ * The main class that initiates and runs the elementor plugin.
+ *
+ * @package Blocks
+ */
+
+namespace BLOCKS;
+
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * Plugin class.
+ *
+ * The main class that initiates and runs the addon.
+ *
+ * @since 1.0
+ */
+final class Plugin {
+
+	public $modules = [];
+
+	/**
+	 * Minimum Elementor Version
+	 *
+	 * @since 1.0
+	 * @var string Minimum Elementor version required to run the addon.
+	 */
+	const MINIMUM_ELEMENTOR_VERSION = '3.16.0';
+
+	/**
+	 * Minimum PHP Version
+	 *
+	 * @since 1.0
+	 * @var string Minimum PHP version required to run the addon.
+	 */
+
+	const MINIMUM_PHP_VERSION = '8.0';
+
+	/**
+	 * Instance
+	 *
+	 * @since 1.0
+	 * @access private
+	 * @static
+	 * @var \Vision_Addons\Plugin The single instance of the class.
+	 */
+	private static $instance = null;
+
+	/**
+	 * Instance
+	 *
+	 * Ensures only one instance of the class is loaded or can be loaded.
+	 *
+	 * @since 1.0
+	 * @access public
+	 * @static
+	 * @return \Vision_Addons\Plugin An instance of the class.
+	 */
+	public static function instance() {
+		if ( is_null( self::$instance ) ) {
+			self::$instance = new self();
+		}
+		return self::$instance;
+	}
+
+	/**
+	 * Constructor
+	 *
+	 * Perform some compatibility checks to make sure basic requirements are meet.
+	 * If all compatibility checks pass, initialize the functionality.
+	 *
+	 * @since 1.0
+	 * @access public
+	 */
+	public function __construct() {
+		if ( $this->is_compatible() ) {
+			add_action( 'elementor/init', [ $this, 'init' ] );
+		}
+	}
+
+	/**
+	 * Compatibility Checks
+	 *
+	 * Checks whether the site meets the addon requirement.
+	 *
+	 * @since 1.0
+	 * @access public
+	 * @return bool
+	 */
+	public function is_compatible(): bool {
+		// Check if Elementor is installed and activated.
+		if ( ! did_action( 'elementor/loaded' ) ) {
+			add_action( 'admin_notices', [ $this, 'admin_notice_missing_main_plugin' ] );
+			return false;
+		}
+
+		// Check for required Elementor version.
+		if ( ! version_compare( ELEMENTOR_VERSION, self::MINIMUM_ELEMENTOR_VERSION, '>=' ) ) {
+			add_action( 'admin_notices', [ $this, 'admin_notice_minimum_elementor_version' ] );
+			return false;
+		}
+
+		// Check for required PHP version.
+		if ( version_compare( PHP_VERSION, self::MINIMUM_PHP_VERSION, '<' ) ) {
+			add_action( 'admin_notices', [ $this, 'admin_notice_minimum_php_version' ] );
+			return false;
+		}
+
+		return true;
+
+	}
+
+	/**
+	 * Admin notice
+	 *
+	 * Warning when the site doesn't have Elementor installed or activated.
+	 *
+	 * @since 1.0
+	 * @access public
+	 */
+	public function admin_notice_missing_main_plugin(): void {
+		if ( isset( $_GET['activate'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			unset( $_GET['activate'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		}
+
+		$message = sprintf(
+			/* translators: 1: Plugin name 2: Elementor */
+			esc_html__( '"%1$s" requires "%2$s" to be installed and activated.', 'blocks' ),
+			'<strong>' . esc_html__( 'Blocks', 'blocks' ) . '</strong>',
+			'<strong>' . esc_html__( 'Elementor', 'blocks' ) . '</strong>'
+		);
+
+		printf( '<div class="notice notice-warning is-dismissible"><p>%1$s</p></div>', $message ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * Admin notice
+	 *
+	 * Warning when the site doesn't have a minimum required Elementor version.
+	 *
+	 * @since 1.0
+	 * @access public
+	 */
+	public function admin_notice_minimum_elementor_version(): void {
+		if ( isset( $_GET['activate'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			unset( $_GET['activate'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		}
+
+		$message = sprintf(
+			/* translators: 1: Plugin name 2: Elementor 3: Required Elementor version */
+			esc_html__( '"%1$s" requires "%2$s" version %3$s or greater.', 'blocks' ),
+			'<strong>' . esc_html__( 'Blocks', 'blocks' ) . '</strong>',
+			'<strong>' . esc_html__( 'Elementor', 'blocks' ) . '</strong>',
+			self::MINIMUM_ELEMENTOR_VERSION
+		);
+
+		printf( '<div class="notice notice-warning is-dismissible"><p>%1$s</p></div>', $message ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * Admin notice
+	 *
+	 * Warning when the site doesn't have a minimum required PHP version.
+	 *
+	 * @since 1.0
+	 * @access public
+	 */
+	public function admin_notice_minimum_php_version(): void {
+		if ( isset( $_GET['activate'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			unset( $_GET['activate'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		}
+
+		$message = sprintf(
+			/* translators: 1: Plugin name 2: PHP 3: Required PHP version */
+			esc_html__( '"%1$s" requires "%2$s" version %3$s or greater.', 'blocks' ),
+			'<strong>' . esc_html__( 'Blocks', 'blocks' ) . '</strong>',
+			'<strong>' . esc_html__( 'PHP', 'blocks' ) . '</strong>',
+			self::MINIMUM_PHP_VERSION
+		);
+
+		printf( '<div class="notice notice-warning is-dismissible"><p>%1$s</p></div>', $message ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * Initialize
+	 *
+	 * Load the addons functionality only after Elementor is initialized.
+	 *
+	 * Fired by `elementor/init` action hook.
+	 *
+	 * @since 1.0
+	 * @access public
+	 */
+	public function init() {
+
+		spl_autoload_register( [ $this, 'autoload' ] );
+
+		$this->blocks_register_modules();
+
+		$this->add_hooks();
+	}
+
+	/**
+	 * Autoload classes based on namesapce.
+	 *
+	 * @param string $class Class.
+	 *
+	 * @access public
+	 */
+	public function autoload( $class ) {
+		// Return if Vision name space is not set.
+		if ( false === strpos( $class, __NAMESPACE__ ) ) {
+			return;
+		}
+		/**
+		 * Prepare filename.
+		 *
+		 * @todo Refactor to use preg_replace.
+		 */
+		$filename = str_replace( __NAMESPACE__ . '\\', '', $class );
+		$filename = str_replace( '\\', DIRECTORY_SEPARATOR, $filename );
+		$filename = str_replace( '_', '-', $filename );
+		$filename = dirname( __FILE__ ) . '/' . strtolower( $filename ) . '.php';
+
+		// Return if file is not found.
+		if ( ! is_readable( $filename ) ) {
+			return;
+		}
+		
+		include $filename;
+	}
+
+	/**
+	 * Adds required hooks
+	 *
+	 * @access private
+	 */
+	private function add_hooks() {
+		add_action( 'wp_footer', [ $this, 'blocks_html_templates' ] );		
+		/* Register categories. */
+		add_action( 'elementor/elements/categories_registered', [ $this, 'blocks_register_categories' ], 15 );
+		/* Register widgets. */
+		add_action( 'elementor/widgets/register', [ $this, 'blocks_register_widgets' ], 15 );
+		/* Register frontend scripts. */
+		add_action( 'elementor/frontend/after_enqueue_scripts', [ $this, 'blocks_register_front_scripts' ] );
+	}
+
+	/**
+	 * Get array of custom html templates
+	 */
+	public function blocks_html_templates() {
+		$templates = [
+			'count-down' => 'count-down.html',
+		];
+
+		$this->blocks_print_templates_array( $templates );
+	}
+
+	/**
+	 * Print templates array
+	 *
+	 * @param array $templates List of templates to print.
+	 * @return [type][description]
+	 */
+	public function blocks_print_templates_array( $templates = [] ) {
+		// Early return if empty templates.
+		if ( empty( $templates ) ) {
+			return;
+		}
+
+		foreach ( $templates as $id => $file ) {
+
+			$file = trailingslashit( plugin_dir_path( __FILE__ ) ) . 'template/' . $file;
+
+			if ( ! file_exists( $file ) ) {
+				continue;
+			}
+
+			ob_start();
+			include $file;
+			$content = ob_get_clean();
+			printf( '<script type="text/html" id="tmpl-%1$s">%2$s</script>', esc_attr( $id ), $content ); // phpcs:ignore
+		}
+	}
+
+	/**
+	 * Register widgets with Elementor.
+	 *
+	 * @access public
+	 *
+	 * @param object $widgets_manager The controls manager.
+	 */
+	public function blocks_register_widgets( $widgets_manager ) {
+		$widgets = preg_grep( '/^((?!index.php).)*$/', glob( plugin_dir_path( __FILE__ ) . 'widgets/*.php' ) );
+
+		// Register widgets.
+		foreach ( $widgets as $widget ) {
+			// Prepare widget name.
+			$widget_name = basename( $widget, '.php' );
+			$widget_name = str_replace( '-', '_', $widget_name );
+
+			// Prepare class name.
+			$class_name = str_replace( '-', '_', $widget_name );
+			$class_name = __NAMESPACE__ . '\Widgets\\' . $class_name;
+
+			if ( ! class_exists( $class_name ) ) {
+				continue;
+			}
+
+			// Register now.
+			$widgets_manager->register( new $class_name() );
+		}
+	}
+
+	/**
+	 * Register categories with Elementor.
+	 *
+	 * @access public
+	 *
+	 * @param object $category_manager The categories manager.
+	 */
+	public function blocks_register_categories( $category_manager ) {
+		$category_manager->add_category(
+			'spark-addons-widgets',
+			[
+				'title' => esc_html__( 'Blocks', 'blocks' ),
+			]
+		);
+	}
+
+	/**
+	 * Register scripts for frontend
+	 *
+	 * @access public
+	 */
+	public function blocks_register_front_scripts() {
+		wp_enqueue_script( 'wp-util' );
+
+		wp_register_script(
+			'jquery-countdown',
+			plugins_url( 'assets/jquery.countdown.min.js', dirname( __FILE__ ) ),
+			[
+				'wp-util',
+				'elementor-frontend',
+			],
+			'2.2.0',
+			true,
+		);
+
+		wp_register_script(
+			'spark-addons-countdown',
+			plugins_url( 'assets/countdown-timer.js', dirname( __FILE__ ) ),
+			[
+				'jquery-countdown',
+			],
+			'1.0',
+			true,
+		);
+	}
+
+	/**
+	 * Register modules.
+	 *
+	 * @access public
+	 */
+	public function blocks_register_modules() {
+		$modules = [
+			'custom-icons\custom-icons',
+		];
+
+		foreach ( $modules as $module_name ) {
+			// Prepare class name.
+			$class_name = str_replace( '-', ' ', $module_name );
+			$class_name = str_replace( ' ', '_', ucwords( $class_name ) );
+			$class_name = __NAMESPACE__ . '\\' . $class_name;
+
+			if ( ! class_exists( $class_name ) ) {
+				continue;
+			}
+
+			// Register.
+			$this->modules[ $module_name ] = new $class_name();
+		}
+	}
+}
+
+Plugin::instance();
+?>
+
+For Elementor Widgets:-------------------
+
+<?php
+namespace BLOCKS\Widgets;
+
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+use Elementor\Widget_Base;
+use Elementor\Controls_Manager;
+use Elementor\Group_Control_Border;
+use Elementor\Group_Control_Box_Shadow;
+use Elementor\Group_Control_Typography;
+use Elementor\Core\Kits\Documents\Tabs\Global_Typography;
+
+/**
+ *
+ * Widget for slider.
+ *
+ * @package Spark Addons for Elementor
+ */
+
+// If class `Slider` doesn't exists yet.
+if ( ! class_exists( 'BLOCKS\Widgets\Slider' ) ) {
+	/**
+	 * Define `Slider` class.
+	 */
+	class Slider extends Widget_Base {
+		/**
+		 * Retrieve the list of scripts the slider widget depended on.
+		 *
+		 * Used to set scripts dependencies required to run the widget.
+		 *
+		 * @access public
+		 *
+		 * @return array Widget scripts dependencies.
+		 */
+		public function get_script_depends() {
+			return [];
+		}
+
+		/**
+		 * Retrieve the list of styles the slider widget depended on.
+		 *
+		 * Used to set styles dependencies required to run the widget.
+		 *
+		 * @access public
+		 *
+		 * @return array Widget styles dependencies.
+		 */
+		public function get_style_depends() {
+			return [];
+		}
+
+		/**
+		 * Retrieve the widget name.
+		 *
+		 * @access public
+		 *
+		 * @return string Widget name.
+		 */
+		public function get_name() {
+			return 'slider';
+		}
+
+		/**
+		 * Retrieve the widget title.
+		 *
+		 * @access public
+		 *
+		 * @return string Widget title.
+		 */
+		public function get_title() {
+			return esc_html__( 'Slider', 'blocks' );
+		}
+
+		/**
+		 * Retrieve the widget icon.
+		 *
+		 * @access public
+		 *
+		 * @return string Widget icon.
+		 */
+		public function get_icon() {
+			return 'eicon-countdown';
+		}
+
+		/**
+		 * Get widget keywords.
+		 *
+		 * Retrieve the list of keywords the widget belongs to.
+		 *
+		 * @access public
+		 *
+		 * @return array Widget keywords.
+		 */
+		public function get_keywords() {
+			return [
+				'number',
+				'coming soon',
+				'maintanance',
+				'landing',
+				'launch',
+				'date',
+			];
+		}
+
+		/**
+		 * Register slider widget controls.
+		 *
+		 * Adds different input fields to allow the user to change and customize the widget settings.
+		 *
+		 * @access protected
+		 */
+		protected function register_controls() {
+			$this->start_controls_section(
+				'general_section',
+				[
+					'label' => esc_html__( 'Test', 'blocks' ),
+				]
+			);
+
+			$this->end_controls_section();
+
+			$this->start_controls_section(
+				'settings_section',
+				[
+					'label' => esc_html__( 'Settings', 'blocks' ),
+				]
+			);
+
+			$this->start_controls_tabs(
+				'tabs'
+			);
+			$this->start_controls_tab(
+				'tab',
+				[
+					'label' => esc_html__( 'Days', 'blocks' ),
+				]
+			);
+			$this->add_control(
+				'day_label',
+				[
+					'label'     => esc_html__( 'Days Label', 'blocks' ),
+					'type'      => Controls_Manager::TEXT,
+					'dynamic'   => [
+						'active' => true,
+					],
+					'default'   => esc_html__( 'Days', 'blocks' ),
+				]
+			);
+			$this->end_controls_tab();
+			$this->end_controls_tabs();
+			$this->end_controls_section();
+		}
+
+		/**
+		 * Render slider widget output on the frontend.
+		 *
+		 * Written in PHP and used to generate the final HTML.
+		 *
+		 * @access protected
+		 */
+		protected function render() {
+			$settings      = $this->get_settings_for_display();
+		}
+	}
+}
+
+
+-----------------------------------------
+
+<?php
+/**
+ * Plugin Name: Google API Integration Example
+ * Description: Demonstrates third-party OAuth 2.0 authentication in WordPress.
+ * Version: 1.0
+ */
+
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+define( 'GAI_CLIENT_ID', 'YOUR_CLIENT_ID' );
+define( 'GAI_CLIENT_SECRET', 'YOUR_CLIENT_SECRET' );
+define( 'GAI_REDIRECT_URI', site_url( '/google-auth-callback/' ) );
+
+// Step 1: Generate Google OAuth URL
+function gai_get_google_auth_url() {
+    $params = array(
+        'client_id' => GAI_CLIENT_ID,
+        'redirect_uri' => GAI_REDIRECT_URI,
+        'response_type' => 'code',
+        'scope' => 'https://www.googleapis.com/auth/userinfo.email',
+        'access_type' => 'offline',
+        'prompt' => 'consent'
+    );
+    return 'https://accounts.google.com/o/oauth2/auth?' . http_build_query( $params );
+}
+
+// Shortcode to show "Login with Google"
+add_shortcode( 'google_login_button', function() {
+    return '<a href="' . esc_url( gai_get_google_auth_url() ) . '" class="button">Login with Google</a>';
+});
+
+// Step 2: Handle OAuth callback
+function gai_handle_google_callback() {
+    if ( isset( $_GET['code'] ) && strpos( $_SERVER['REQUEST_URI'], '/google-auth-callback/' ) !== false ) {
+        $response = wp_remote_post( 'https://oauth2.googleapis.com/token', array(
+            'body' => array(
+                'code' => sanitize_text_field( $_GET['code'] ),
+                'client_id' => GAI_CLIENT_ID,
+                'client_secret' => GAI_CLIENT_SECRET,
+                'redirect_uri' => GAI_REDIRECT_URI,
+                'grant_type' => 'authorization_code'
+            )
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            wp_die( 'OAuth request failed.' );
+        }
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        $access_token = $body['access_token'] ?? '';
+
+        if ( $access_token ) {
+            // Fetch user info
+            $user_info = wp_remote_get( 'https://www.googleapis.com/oauth2/v2/userinfo', array(
+                'headers' => array( 'Authorization' => 'Bearer ' . $access_token )
+            ) );
+            $user_data = json_decode( wp_remote_retrieve_body( $user_info ), true );
+            echo '<pre>'; print_r( $user_data ); echo '</pre>';
+            exit;
+        }
+    }
+}
+add_action( 'init', 'gai_handle_google_callback' );
+
+
+-------------------------------------------------------------------------------------------------------
+
+<?php
+/**
+ * Plugin Name: REST API Integration Demo
+ * Description: Example plugin to integrate third-party REST API and create custom REST endpoints.
+ * Version: 1.0
+ * Author: Er Jaydip
+ */
+
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+// Register Custom Post Type
+function ar_create_user_post_type() {
+    register_post_type( 'api_user', array(
+        'label' => 'API Users',
+        'public' => true,
+        'supports' => array( 'title', 'custom-fields' ),
+    ));
+}
+add_action( 'init', 'ar_create_user_post_type' );
+
+// Custom REST route to fetch and import users
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'api-demo/v1', '/import-users', array(
+        'methods' => 'GET',
+        'callback' => 'ar_import_users_from_api',
+    ));
+});
+
+// Callback to import users
+function ar_import_users_from_api() {
+    $response = wp_remote_get( 'https://jsonplaceholder.typicode.com/users' );
+
+    if ( is_wp_error( $response ) ) {
+        return rest_ensure_response( array( 'error' => 'API request failed.' ) );
+    }
+
+    $users = json_decode( wp_remote_retrieve_body( $response ), true );
+
+    foreach ( $users as $user ) {
+        wp_insert_post( array(
+            'post_title' => $user['name'],
+            'post_type'  => 'api_user',
+            'post_status'=> 'publish',
+            'meta_input' => array(
+                'email' => $user['email'],
+                'company' => $user['company']['name'],
+            ),
+        ));
+    }
+
+    return rest_ensure_response( array( 'message' => 'Users imported successfully!' ) );
+}
+
+---https://yourdomain.com/wp-json/api-demo/v1/import-users
+
+
+-----------------------------------------------------------------------------
+
+
+<?php
+/**
+ * Plugin Name: Portfolio Gutenberg Block (Dynamic)
+ * Description: Gutenberg block with server-side rendering for Portfolio CPT.
+ * Version: 1.1
+ * Author: Er Jaydip
+ */
+
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+/**
+ * Register Portfolio Custom Post Type
+ */
+function pb_register_portfolio_cpt() {
+    $labels = array(
+        'name' => 'Portfolios',
+        'singular_name' => 'Portfolio',
+    );
+
+    $args = array(
+        'labels' => $labels,
+        'public' => true,
+        'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt' ),
+        'show_in_rest' => true,
+    );
+
+    register_post_type( 'portfolio', $args );
+}
+add_action( 'init', 'pb_register_portfolio_cpt' );
+
+/**
+ * Register Gutenberg Block (Dynamic)
+ */
+function pb_register_portfolio_block() {
+    wp_register_script(
+        'portfolio-block-script',
+        plugins_url( 'block/block.js', __FILE__ ),
+        array( 'wp-blocks', 'wp-element', 'wp-editor', 'wp-components' ),
+        filemtime( plugin_dir_path( __FILE__ ) . 'block/block.js' )
+    );
+
+    wp_register_style(
+        'portfolio-block-style',
+        plugins_url( 'block/style.css', __FILE__ ),
+        array(),
+        filemtime( plugin_dir_path( __FILE__ ) . 'block/style.css' )
+    );
+
+    register_block_type( 'custom/portfolio-list', array(
+        'editor_script'   => 'portfolio-block-script',
+        'style'           => 'portfolio-block-style',
+        'render_callback' => 'pb_render_portfolio_block',
+        'attributes'      => array(
+            'postsToShow' => array(
+                'type'    => 'number',
+                'default' => 5,
+            ),
+            'order' => array(
+                'type'    => 'string',
+                'default' => 'DESC',
+            ),
+        ),
+    ));
+}
+add_action( 'init', 'pb_register_portfolio_block' );
+
+/**
+ * Server-Side Rendering (Dynamic Output)
+ */
+function pb_render_portfolio_block( $attributes ) {
+    $args = array(
+        'post_type'      => 'portfolio',
+        'posts_per_page' => $attributes['postsToShow'],
+        'order'          => $attributes['order'],
+    );
+
+    $query = new WP_Query( $args );
+
+    if ( ! $query->have_posts() ) {
+        return '<p>No portfolio items found.</p>';
+    }
+
+    ob_start();
+    echo '<div class="portfolio-block">';
+    while ( $query->have_posts() ) : $query->the_post();
+        echo '<div class="portfolio-item">';
+        if ( has_post_thumbnail() ) {
+            the_post_thumbnail( 'medium' );
+        }
+        echo '<h3>' . get_the_title() . '</h3>';
+        echo '<p>' . get_the_excerpt() . '</p>';
+        echo '</div>';
+    endwhile;
+    echo '</div>';
+    wp_reset_postdata();
+
+    return ob_get_clean();
+}
+
+
+
+
+const { registerBlockType } = wp.blocks;
+const { InspectorControls } = wp.blockEditor;
+const { PanelBody, RangeControl, SelectControl } = wp.components;
+const { useBlockProps } = wp.blockEditor;
+
+registerBlockType('custom/portfolio-list', {
+    title: 'Portfolio List (Dynamic)',
+    icon: 'images-alt2',
+    category: 'widgets',
+    attributes: {
+        postsToShow: { type: 'number', default: 5 },
+        order: { type: 'string', default: 'DESC' },
+    },
+
+    edit: ({ attributes, setAttributes }) => {
+        const blockProps = useBlockProps();
+
+        return (
+            <>
+                <InspectorControls>
+                    <PanelBody title="Portfolio Settings">
+                        <RangeControl
+                            label="Number of Portfolios"
+                            value={attributes.postsToShow}
+                            onChange={(value) => setAttributes({ postsToShow: value })}
+                            min={1}
+                            max={20}
+                        />
+                        <SelectControl
+                            label="Order"
+                            value={attributes.order}
+                            options={[
+                                { label: 'Descending', value: 'DESC' },
+                                { label: 'Ascending', value: 'ASC' },
+                            ]}
+                            onChange={(value) => setAttributes({ order: value })}
+                        />
+                    </PanelBody>
+                </InspectorControls>
+                <div {...blockProps}>
+                    <p><strong>Portfolio Preview:</strong> (Will render dynamically)</p>
+                </div>
+            </>
+        );
+    },
+
+    save: () => null // Rendered via PHP
+});
+
+
+.portfolio-block {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+.portfolio-item {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.portfolio-item img {
+  width: 100%;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.portfolio-item h3 {
+  margin: 0 0 10px;
+}
+
+
+
+
+
+
+
